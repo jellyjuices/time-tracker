@@ -132,7 +132,7 @@ tt new "Write proposal"         create and start
 tt add "Later thing"            create without starting
 tt start proposal               start / switch (id or name substring)
 tt stop
-tt done [proposal]              complete; defaults to what's running
+tt done [proposal]              complete; defaults to the current task
 tt reopen proposal
 tt rename proposal "New name"
 tt reset [proposal]             forget all its time, clock back to zero
