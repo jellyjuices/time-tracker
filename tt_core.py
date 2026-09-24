@@ -208,6 +208,7 @@ def blank_task(ev):
         "completed_at": None,
         "deleted": False,
         "note": ev.get("note", ""),
+        "color": None,
     }
 
 
@@ -275,6 +276,8 @@ def replay(events):
             st.tasks[tid]["completed_at"] = None
         elif kind == "rename":
             st.tasks[tid]["name"] = ev["name"]
+        elif kind == "color":
+            st.tasks[tid]["color"] = ev.get("color")
         elif kind == "delete":
             drop_current(tid, ts)
             st.tasks[tid]["deleted"] = True
@@ -372,6 +375,24 @@ def reset(task_id, since=0.0):
 
 def reopen(task_id):
     append_event(type="reopen", id=task_id)
+    return load()
+
+
+COLORS = {
+    "Red": 160,
+    "Orange": 208,
+    "Yellow": 220,
+    "Green": 34,
+    "Teal": 36,
+    "Blue": 33,
+    "Purple": 99,
+    "Pink": 162,
+}
+
+
+def set_color(task_id, color):
+    append_event(type="color", id=task_id,
+                 color=color if color in COLORS else None)
     return load()
 
 

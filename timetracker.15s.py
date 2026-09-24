@@ -99,6 +99,21 @@ def alert(text, depth=0):
     line(text, "size=11", RED, depth=depth)
 
 
+def bullet(color):
+    code = tt.COLORS.get(color)
+    return "\033[38;5;%dm●\033[0m" % code if code else "●"
+
+
+def color_menu(task, depth):
+    dropdown("Colour", depth=depth)
+    current = task.get("color")
+    for name in [None] + list(tt.COLORS):
+        action("%s %s" % (bullet(name), name or "None"),
+               "color", task["id"], name or "none",
+               style=["ansi=true"] + (["checked=true"] if name == current else []),
+               depth=depth + 1)
+
+
 def menu_bar(st, task):
     if not task:
         line("", "sfimage=stopwatch", "size=13")
@@ -150,9 +165,10 @@ def root_view(st):
     if tasks:
         subheading("Tasks")
     for task in tasks:
-        action("%-26s %8s" % (trunc(task["name"], 26),
-                                 tt.short(st.total(task["id"]))),
-               "start", task["id"], style=MONO, icon="play")
+        action("%s %-26s %8s" % (bullet(task.get("color")),
+                                    trunc(task["name"], 26),
+                                    tt.short(st.total(task["id"]))),
+               "start", task["id"], style=list(MONO) + ["ansi=true"])
     sep()
     action("New task", "new", icon="plus.circle")
     manage_menu(tasks)
@@ -169,6 +185,7 @@ def options_menu(task):
     action("Rename", "rename", task["id"], depth=1, icon="pencil")
     action("Reset current session", "reset", task["id"], depth=1,
            icon="arrow.counterclockwise")
+    color_menu(task, depth=1)
     action("Delete", "delete", task["id"], depth=1, icon="trash")
 
 
@@ -177,8 +194,10 @@ def manage_menu(tasks):
         return
     dropdown("Manage", icon="ellipsis.circle")
     for task in tasks:
-        dropdown(trunc(task["name"], 18), depth=1)
+        dropdown("%s %s" % (bullet(task.get("color")), trunc(task["name"], 18)),
+                 "ansi=true", depth=1)
         action("Rename", "rename", task["id"], depth=2)
+        color_menu(task, depth=2)
         action("Mark complete", "complete", task["id"], depth=2)
         action("Delete", "delete", task["id"], depth=2)
 
@@ -341,6 +360,9 @@ def do(argv):
         name = tt.ask("Rename task:", task["name"])
         if name:
             tt.rename(rest[0], name)
+
+    elif cmd == "color":
+        tt.set_color(rest[0], rest[1])
 
     elif cmd == "reset":
         task = st.tasks[rest[0]]
