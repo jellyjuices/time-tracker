@@ -31,7 +31,7 @@ BEAT = 30.0
 
 MAX_TITLE = 18
 
-GREY = "color=#888888"
+GREY = "color=#666666"
 RED = "color=#c92a2a"
 ORANGE = "#e8590c"
 MONO = ("font=Menlo", "size=12")
@@ -99,9 +99,9 @@ def alert(text, depth=0):
     line(text, "size=11", RED, depth=depth)
 
 
-def bullet(color):
+def bullet(color, dot="●"):
     code = tt.COLORS.get(color)
-    return "\033[38;5;%dm●\033[0m" % code if code else "●"
+    return "\033[38;5;%dm%s\033[0m" % (code, dot) if code else dot
 
 
 def color_menu(task, depth):
@@ -118,17 +118,22 @@ def menu_bar(st, task):
     if not task:
         line("", "sfimage=stopwatch", "size=13")
         return
-    icon, color = (("record.circle.fill", ORANGE) if st.running
-                   else ("pause.circle", "#888888"))
-    line("%s  %s" % (trunc(task["name"]), tt.hms(tt.total_today(st, task["id"]))),
-         "sfimage=" + icon, "sfcolor=" + color, "font=Menlo", "size=13")
+    label = "%s  %s" % (trunc(task["name"]), tt.hms(tt.total_today(st, task["id"])))
+    if st.running:
+        # Text bullet, not an sfimage: SwiftBar fixes the icon-to-title gap.
+        code = tt.COLORS.get(task.get("color"), 208)
+        line("\033[38;5;%dm●\033[0m %s" % (code, label),
+             "ansi=true", "font=Menlo", "size=13")
+    else:
+        line(label, "sfimage=pause.circle", "sfcolor=#888888",
+             "font=Menlo", "size=13")
 
 
 def overview(st):
     heading("Time Tracker")
     since, until, _, _ = tt.period_bounds(0)
     if tt.minutes(st.grand_total(since, until)):
-        subheading("Today  %s      Pay period  %s"
+        subheading("Today  %s • Period total  %s"
                    % (tt.short(st.grand_total(*tt.day_bounds())),
                       tt.short(st.grand_total(since, until))))
     sep()
@@ -140,25 +145,23 @@ def overview(st):
 
 
 def task_view(st, task):
-    heading("%s  %s" % (task["name"], tt.hms(tt.total_today(st, task["id"]))))
+    action("%s %s  %s" % (bullet(task.get("color"), "●"), task["name"],
+                              tt.hms(tt.total_today(st, task["id"]))),
+           "noop", style=["ansi=true", "size=14"])
     if st.running:
         since, until, _, _ = tt.period_bounds(0)
-        subheading("Today: %s • Pay period %s"
+        subheading("Today: %s • Period total %s"
                    % (tt.short(tt.total_today(st, task["id"])),
                       tt.short(st.total(task["id"], since, until))))
-        sep()
         action("Pause", "pause", icon="pause.circle")
     else:
         subheading("paused at %s · %s today"
                    % (tt.local(st.paused["at"]).strftime("%H:%M"),
                       tt.short(tt.total_today(st, task["id"]))))
-        sep()
-        action("Resume", "start", task["id"], icon="play.circle")
-    action("Stop", "stop", icon="stop.circle")
+        action("Resume", "start", task["id"], icon="play")
+    action("End session", "stop", icon="stop.circle")
     sep()
-    action("Finish", "complete", task["id"], icon="checkmark.circle")
     options_menu(task)
-
 
 def root_view(st):
     tasks = st.active_tasks()
@@ -181,24 +184,24 @@ def root_view(st):
 
 
 def options_menu(task):
-    dropdown("Options", icon="ellipsis.circle")
-    action("Rename", "rename", task["id"], depth=1, icon="pencil")
-    action("Reset current session", "reset", task["id"], depth=1,
-           icon="arrow.counterclockwise")
+    dropdown("Options")
+    action("Rename", "rename", task["id"], depth=1)
     color_menu(task, depth=1)
+    action("Reset session", "reset", task["id"], depth=1)
+    action("Archive", "complete", task["id"], depth=1, icon="archivebox")
     action("Delete", "delete", task["id"], depth=1, icon="trash")
 
 
 def manage_menu(tasks):
     if not tasks:
         return
-    dropdown("Manage", icon="ellipsis.circle")
+    dropdown("Manage")
     for task in tasks:
         dropdown("%s %s" % (bullet(task.get("color")), trunc(task["name"], 18)),
                  "ansi=true", depth=1)
         action("Rename", "rename", task["id"], depth=2)
         color_menu(task, depth=2)
-        action("Mark complete", "complete", task["id"], depth=2)
+        action("Archive", "complete", task["id"], depth=2)
         action("Delete", "delete", task["id"], depth=2)
 
 
