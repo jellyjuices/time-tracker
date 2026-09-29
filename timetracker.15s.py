@@ -114,6 +114,28 @@ def color_menu(task, depth):
                depth=depth + 1)
 
 
+def adjust_menu(task, depth):
+    dropdown("Adjust", depth=depth)
+    for label, mins in (("+30 mins", 30), ("+1 hour", 60),
+                        ("−30 mins", -30), ("−1 hour", -60)):
+        action(label, "adjust", task["id"], str(mins), depth=depth + 1)
+    sep(depth + 1)
+    action("Custom…", "adjust", task["id"], "custom", depth=depth + 1)
+
+
+def parse_minutes(text):
+    text = text.strip().replace(" ", "")
+    sign = -1 if text[:1] in "-−" else 1
+    text = text.lstrip("+-−")
+    try:
+        if ":" in text:
+            h, m = text.split(":", 1)
+            return sign * (int(h or 0) * 60 + int(m or 0))
+        return sign * int(text)
+    except ValueError:
+        return None
+
+
 def menu_bar(st, task):
     if not task:
         line("", "sfimage=stopwatch", "size=13")
@@ -187,6 +209,7 @@ def options_menu(task):
     dropdown("Options")
     action("Rename", "rename", task["id"], depth=1)
     color_menu(task, depth=1)
+    adjust_menu(task, depth=1)
     action("Reset session", "reset", task["id"], depth=1)
     action("Archive", "complete", task["id"], depth=1, icon="archivebox")
     action("Delete", "delete", task["id"], depth=1, icon="trash")
@@ -209,13 +232,11 @@ def completed_menu(st):
     done = st.completed_tasks()
     if not done:
         return
-    dropdown("Completed (%d)" % len(done))
+    dropdown("Archive (%d)" % len(done))
     for task in done[:25]:
         dropdown("%s — %s" % (trunc(task["name"], 26),
                               tt.short(st.total(task["id"]))), depth=1)
-        action("Reopen & start", "start", task["id"], depth=2)
-        action("Reopen only", "reopen", task["id"], depth=2)
-        action("Delete", "delete", task["id"], depth=2)
+        action("Unarchive", "reopen", task["id"], depth=2)
 
 
 def export_menu():
@@ -355,7 +376,10 @@ def do(argv):
         name = tt.ask("Name for the new task:")
         if not name:
             return
-        tt.create_task(name, start=True)
+        # DECISION: cancelling the colour step still creates the task, uncoloured.
+        color = tt.choose("Colour for “%s”:" % name.strip(),
+                          ["None"] + list(tt.COLORS))
+        tt.create_task(name, start=True, color=color)
         tt.beat()
 
     elif cmd == "rename":
@@ -366,6 +390,20 @@ def do(argv):
 
     elif cmd == "color":
         tt.set_color(rest[0], rest[1])
+
+    elif cmd == "adjust":
+        if rest[1] == "custom":
+            text = tt.ask("Adjust “%s” by how many minutes?\n\n"
+                          "(e.g. 45, -20 or 1:30)" % st.tasks[rest[0]]["name"], "+")
+            if text is None:
+                return
+            mins = parse_minutes(text)
+            if mins is None:
+                tt.flash("“%s” is not a number of minutes — time unchanged" % text)
+                return
+        else:
+            mins = int(rest[1])
+        tt.adjust(rest[0], mins * 60)
 
     elif cmd == "reset":
         task = st.tasks[rest[0]]

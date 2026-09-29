@@ -231,6 +231,32 @@ def replay(events):
         if st.paused and st.paused["task_id"] == tid:
             st.paused = None
 
+    def shift(tid, seconds, at):
+        running = st.running and st.running["task_id"] == tid
+        if seconds > 0:
+            if running:
+                st.running = dict(st.running, start=st.running["start"] - seconds)
+            else:
+                end = st.paused["at"] if st.paused and st.paused["task_id"] == tid else at
+                st.sessions.append({"task_id": tid, "start": end - seconds,
+                                    "end": end, "recovered": False})
+            return
+        left = -seconds
+        if running:
+            take = min(left, max(0.0, at - st.running["start"]))
+            st.running = dict(st.running, start=st.running["start"] + take)
+            left -= take
+        for i in range(len(st.sessions) - 1, -1, -1):
+            sess = st.sessions[i]
+            if left <= 0:
+                break
+            if sess["task_id"] != tid:
+                continue
+            take = min(left, sess["end"] - sess["start"])
+            st.sessions[i] = dict(sess, end=sess["end"] - take)
+            left -= take
+        st.sessions = [s for s in st.sessions if s["end"] > s["start"]]
+
     for ev in events:
         kind = ev.get("type")
         tid = ev.get("id")
@@ -281,6 +307,8 @@ def replay(events):
         elif kind == "delete":
             drop_current(tid, ts)
             st.tasks[tid]["deleted"] = True
+        elif kind == "adjust" and "seconds" in ev:
+            shift(tid, ev["seconds"], ts)
         elif kind == "adjust":
             st.sessions.append({"task_id": tid, "start": ev["start"],
                                 "end": ev["end"], "recovered": False})
@@ -316,10 +344,12 @@ def new_id():
     return uuid.uuid4().hex[:8]
 
 
-def create_task(name, start=False):
+def create_task(name, start=False, color=None):
     tid = new_id()
     with locked():
         append_event(type="create", id=tid, name=name.strip() or "Untitled")
+        if color in COLORS:
+            append_event(type="color", id=tid, color=color)
         if start:
             append_event(type="start", id=tid)
     return tid
@@ -370,6 +400,12 @@ def complete(task_id=None):
 
 def reset(task_id, since=0.0):
     append_event(type="reset", id=task_id, since=since)
+    return load()
+
+
+def adjust(task_id, seconds):
+    if seconds:
+        append_event(type="adjust", id=task_id, seconds=seconds)
     return load()
 
 
@@ -585,6 +621,14 @@ def ask(prompt, default="", title="Time Tracker"):
         'text returned of (display dialog %s with title %s default answer %s '
         'buttons {"Cancel", "OK"} default button "OK")'
         % (q(prompt), q(title), q(default)))
+
+
+def choose(prompt, items, default=None, title="Time Tracker"):
+    out = osascript(
+        'choose from list {%s} with prompt %s with title %s default items {%s}'
+        % (", ".join(q(i) for i in items), q(prompt), q(title),
+           q(default or items[0])))
+    return None if out in (None, "false") else out
 
 
 def confirm(prompt, title="Time Tracker"):
